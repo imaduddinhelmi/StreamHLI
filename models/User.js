@@ -36,11 +36,11 @@ class User {
   static async create(userData) {
     try {
       const hashedPassword = await bcrypt.hash(userData.password, 10);
-      const userId = uuidv4();
+      const userId = userData.id || uuidv4();
       return new Promise((resolve, reject) => {
         db.run(
-          'INSERT INTO users (id, username, password, avatar_path) VALUES (?, ?, ?, ?)',
-          [userId, userData.username, hashedPassword, userData.avatar_path],
+          'INSERT INTO users (id, username, password, email, avatar_path, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+          [userId, userData.username, hashedPassword, userData.email || null, userData.avatar_path || null, userData.role || 'user', userData.status || 'active'],
           function (err) {
             if (err) {
               console.error("DB error during user creation:", err);
@@ -77,6 +77,17 @@ class User {
   }
   static async verifyPassword(plainPassword, hashedPassword) {
     return bcrypt.compare(plainPassword, hashedPassword);
+  }
+
+  static delete(userId) {
+    return new Promise((resolve, reject) => {
+      db.run('DELETE FROM users WHERE id = ?', [userId], function (err) {
+        if (err) {
+          return reject(err);
+        }
+        resolve({ deleted: this.changes > 0 });
+      });
+    });
   }
 }
 module.exports = User;

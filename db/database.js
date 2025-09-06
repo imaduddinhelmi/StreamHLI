@@ -19,13 +19,33 @@ function createTables() {
     id TEXT PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
+    email TEXT,
     avatar_path TEXT,
     gdrive_api_key TEXT,
+    role TEXT DEFAULT 'user',
+    status TEXT DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`, (err) => {
     if (err) {
       console.error('Error creating users table:', err.message);
+    } else {
+      // Add new columns if they don't exist (for existing databases)
+      db.run(`ALTER TABLE users ADD COLUMN email TEXT`, (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column name')) {
+          console.error('Error adding email column:', alterErr.message);
+        }
+      });
+      db.run(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'`, (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column name')) {
+          console.error('Error adding role column:', alterErr.message);
+        }
+      });
+      db.run(`ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'`, (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column name')) {
+          console.error('Error adding status column:', alterErr.message);
+        }
+      });
     }
   });
   db.run(`CREATE TABLE IF NOT EXISTS videos (

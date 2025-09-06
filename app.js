@@ -478,6 +478,8 @@ app.post('/register', upload.single('avatar'), [
       username: req.body.username,
       password: req.body.password,
       avatar_path: avatarPath,
+      role: 'admin', // First user is admin
+      status: 'active'
     });
     req.session.userId = userId;
     req.session.username = req.body.username;
@@ -538,6 +540,22 @@ app.get('/settings', isAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Settings error:', error);
     res.redirect('/login');
+  }
+});
+app.get('/users', isAuthenticated, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.userId);
+    if (!user || user.role !== 'admin') {
+      return res.redirect('/dashboard');
+    }
+    res.render('users', {
+      title: 'User Management',
+      active: 'users',
+      user: user
+    });
+  } catch (error) {
+    console.error('Users page error:', error);
+    res.redirect('/dashboard');
   }
 });
 app.get('/history', isAuthenticated, async (req, res) => {
@@ -1545,6 +1563,152 @@ app.get('/api/server-time', (req, res) => {
     serverTime: now.toISOString(),
     formattedTime: formattedTime
   });
+});
+// User Management API Routes
+app.get('/api/users', isAuthenticated, async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.session.userId);
+    if (!currentUser || currentUser.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const db = require('./db/database').db;
+    const users = await new Promise((resolve, reject) => {
+      db.all('SELECT id, username, email, role, status, created_at FROM users ORDER BY created_at DESC', [], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+
+    res.json({ success: true, users });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch users' });
+  }
+});
+
+app.get('/api/users/:id', isAuthenticated, async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.session.userId);
+    if (!currentUser || currentUser.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch user' });
+  }
+});
+
+app.post('/api/users', isAuthenticated, [
+  body('username').trim().isLength({ min: 3, max: 20 }).withMessage('Username must be between 3 and 20 characters'),
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters long'),
+], async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.session.userId);
+    if (!currentUser || currentUser.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const existingUsername = await User.findByUsername(req.body.username);
+    if (existingUsername) {
+      return res.status(400).json({ success: false, error: 'Username is already taken' });
+    }
+
+    const userId = uuidv4();
+    await User.create({
+      id: userId,
+      username: req.body.username,
+      password: req.body.password,
+      email: req.body.email || null,
+      role: req.body.role || 'user',
+      status: 'active'
+    });
+
+    res.json({ success: true, user: { id: userId, username: req.body.username } });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ success: false, error: 'Failed to create user' });
+  }
+});
+
+app.put('/api/users/:id', isAuthenticated, [
+  body('username').trim().isLength({ min: 3, max: 20 }).withMessage('Username must be between 3 and 20 characters'),
+], async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.session.userId);
+    if (!currentUser || currentUser.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (req.body.username !== user.username) {
+      const existingUsername = await User.findByUsername(req.body.username);
+      if (existingUsername) {
+        return res.status(400).json({ success: false, error: 'Username is already taken' });
+      }
+    }
+
+    const updateData = {
+      username: req.body.username,
+      email: req.body.email || null,
+      role: req.body.role || 'user',
+      status: req.body.status || 'active'
+    };
+
+    await User.update(req.params.id, updateData);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ success: false, error: 'Failed to update user' });
+  }
+});
+
+app.delete('/api/users/:id', isAuthenticated, async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.session.userId);
+    if (!currentUser || currentUser.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Prevent deleting self
+    if (req.params.id === req.session.userId) {
+      return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
+    }
+
+    await User.delete(req.params.id);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete user' });
+  }
 });
 app.listen(port, '0.0.0.0', async () => {
   const ipAddresses = getLocalIpAddresses();

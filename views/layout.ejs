@@ -97,6 +97,13 @@
           <span class="text-xs mt-1">History</span>
           <span class="sidebar-tooltip group-hover:scale-100">Stream History</span>
         </a>
+        <% if (typeof user !== 'undefined' && user && user.role === 'admin') { %>
+        <a href="/users" class="sidebar-icon group <%= active === 'users' ? 'bg-primary' : '' %>">
+          <i class="ti ti-users text-xl"></i>
+          <span class="text-xs mt-1">Users</span>
+          <span class="sidebar-tooltip group-hover:scale-100">User Management</span>
+        </a>
+        <% } %>
       </div>
       <div class="mt-auto">
         <div class="h-px bg-gray-700 w-full"></div>
@@ -216,6 +223,12 @@
         <i class="ti ti-settings"></i>
         <span>Settings</span>
       </a>
+      <% if (typeof user !== 'undefined' && user && user.role === 'admin') { %>
+      <a href="/users" class="bottom-nav-item <%= active === 'users' ? 'bottom-nav-active' : '' %>">
+        <i class="ti ti-users"></i>
+        <span>Users</span>
+      </a>
+      <% } %>
       <button id="mobile-profile-btn" class="bottom-nav-item">
         <div class="relative">
           <div class="w-6 h-6 rounded-full overflow-hidden mx-auto">
